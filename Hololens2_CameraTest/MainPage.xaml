@@ -1,0 +1,41 @@
+﻿<Page
+    x:Class="Hololens2_CameraTest.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Hololens2_CameraTest"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Grid>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="100*" />
+            <RowDefinition Height="100*" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"></ColumnDefinition>
+            <ColumnDefinition Width="*"></ColumnDefinition>
+        </Grid.ColumnDefinitions>
+
+        <CaptureElement Grid.Row="0" Grid.Column="0" x:Name="PreviewControl" Stretch="Uniform" />
+        <Image Grid.Row="0" Grid.Column="1" x:Name="LiveImage" Stretch="Uniform"></Image>
+
+        <ScrollViewer x:Name="outputScrollViewer" Grid.Row="1" Grid.ColumnSpan="2" Background="Navy" Padding="5,8,5,5">
+            <ScrollViewer.Resources>
+                <DataTemplate x:Key="DisplayNameTemplate">
+                    <TextBlock Text="{Binding Path=DisplayName}" />
+                </DataTemplate>
+            </ScrollViewer.Resources>
+            <TextBlock x:Name="outputTextBlock"
+                       Foreground="Gold" 
+                       FontFamily="Arial"
+                       FontSize="18"
+                       FontStyle="Normal"
+                       FontWeight="Bold"
+                       TextWrapping="Wrap"
+                       Margin="0,10,0,0"/>
+        </ScrollViewer>
+    </Grid>
+</Page>
