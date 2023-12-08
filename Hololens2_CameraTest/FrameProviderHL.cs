@@ -56,6 +56,7 @@ namespace Hololens2_CameraTest
  
     public class CameraParameters
     {
+        const string DefaultVideoFormat = "NV12";
         /// <summary>
         /// A valid height resolution for use with the camera.
         /// </summary>
@@ -71,11 +72,14 @@ namespace Hololens2_CameraTest
         /// </summary>
         public float FrameRate;
 
-        public CameraParameters(int cameraResolutionWidth, int cameraResolutionHeight, float frameRate)
+        public string VideoFormat;
+
+        public CameraParameters(int cameraResolutionWidth, int cameraResolutionHeight, float frameRate, string videoFormat = DefaultVideoFormat)
         {
             CameraResolutionHeight = cameraResolutionHeight;
             CameraResolutionWidth = cameraResolutionWidth;
             FrameRate = frameRate;
+            VideoFormat = videoFormat;
         }
 
         public override string ToString()
@@ -115,7 +119,7 @@ namespace Hololens2_CameraTest
         internal event EventHandler<CameraInitializedEventArgs> CameraInitialized;
         
         #region Constructor
-        public FrameProviderHL(SimpleLogger logger)
+        public FrameProviderHL(SimpleLogger logger, string videoformat = "NV12")
         {
             _logger = logger;
 
@@ -127,12 +131,12 @@ namespace Hololens2_CameraTest
             {
                 case "Windows.Desktop":
                     _logger.Log("Windows desktop system architecture detected");
-                    _cameraParams = new CameraParameters(1280, 720, 30);
+                    _cameraParams = new CameraParameters(1280, 720, 30, videoformat);
                     break;
                 case "Windows.Holographic":
                     _logger.Log("Windows.Holographic system architecture detected");
-                    // _cameraParams = new CameraParameters(896, 504, 30);
-                    _cameraParams = new CameraParameters(2272, 1278, 15);
+                    _cameraParams = new CameraParameters(896, 504, 30, videoformat);
+                    //_cameraParams = new CameraParameters(2272, 1278, 15);
                     break;
                 default:
                     _logger.Log("Unknown architecture detected");
@@ -262,7 +266,7 @@ namespace Hololens2_CameraTest
                                 &&
                                 Math.Round(format.FrameRate.Numerator / format.FrameRate.Denominator - _cameraParams.FrameRate) < Tolerance
                                 &&
-                                format.Subtype == "NV12");
+                                format.Subtype == _cameraParams.VideoFormat.ToUpper());
 
                 _logger.Log("matching Formats:");
                 var mediaFrameFormats = preferredFormat as MediaFrameFormat[] ?? preferredFormat.ToArray();
@@ -280,7 +284,7 @@ namespace Hololens2_CameraTest
                 FrameWidth = Convert.ToInt32(selectedFormat.VideoFormat.Width);
                 FrameHeight = Convert.ToInt32(selectedFormat.VideoFormat.Height);
 
-                _logger.Log($"FrameReader initialized using {FrameWidth} x {FrameHeight}, frame rate: {selectedFormat.FrameRate.Numerator}/{selectedFormat.FrameRate.Denominator}");
+                _logger.Log($"FrameReader initialized using {FrameWidth} x {FrameHeight}, frame rate: {selectedFormat.FrameRate.Numerator}/{selectedFormat.FrameRate.Denominator} and {selectedFormat.Subtype} {selectedFormat.MajorType}");
             }
             catch (Exception exception)
             {
@@ -317,7 +321,23 @@ namespace Hololens2_CameraTest
                             byte* pixelData;
                             uint capacity;
                             ((IMemoryBufferByteAccess)reference).GetBuffer(out pixelData, out capacity);
-                            Marshal.Copy((IntPtr)pixelData, rawPixelData, 0, rawPixelData.Length);
+                            switch (_cameraParams.VideoFormat)
+                            {
+                                case "NV12":
+                                    Marshal.Copy((IntPtr)pixelData, rawPixelData, 0, rawPixelData.Length);
+                                    break;
+
+                                case "YUY2":
+                                    for (int i = 0, j = 0; i < _cameraParams.CameraResolutionWidth * _cameraParams.CameraResolutionHeight; i++, j += 2)
+                                    {
+                                        rawPixelData[i] = pixelData[j];
+                                    }
+
+                                    break;
+                                default:
+                                    throw new ArgumentException(
+                                        $"Video format {_cameraParams.VideoFormat} not supported");
+                            }
                         }
                     
                     FrameArrived?.Invoke(this, new FrameArrivedEventArgs(rawPixelData, width, height));
