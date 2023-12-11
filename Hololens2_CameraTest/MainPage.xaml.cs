@@ -31,8 +31,8 @@ namespace Hololens2_CameraTest
 
             // Create a SoftwareBitmapSource to display the Camera image to the screen
             _imageSource = new SoftwareBitmapSource();
-            //_camera = new FrameProviderHL(_logger, "YUY2");
-            _camera = new FrameProviderHL(_logger, "NV12");
+            _camera = new FrameProviderHL(_logger, "YUY2");
+            //_camera = new FrameProviderHL(_logger, "NV12");
 
             _camera.FrameArrived += OnFrameArrived;
             _camera.CameraInitialized += OnCameraInitialized;

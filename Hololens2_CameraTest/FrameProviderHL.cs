@@ -10,6 +10,7 @@ using Windows.Media.Capture.Frames;
 using Windows.Graphics.Imaging;
 using Windows.Perception.Spatial;
 using Windows.Foundation;
+using Windows.Media.MediaProperties;
 using Windows.System.Profile;
 
 namespace Hololens2_CameraTest
@@ -84,7 +85,7 @@ namespace Hololens2_CameraTest
 
         public override string ToString()
         {
-            return $"Camera Resolution: {CameraResolutionWidth}x{CameraResolutionHeight}, FrameRate: {FrameRate}";
+            return $"Camera Resolution: {CameraResolutionWidth}x{CameraResolutionHeight}, FrameRate: {FrameRate}, Format: {VideoFormat}";
         }
     }
     
@@ -131,19 +132,22 @@ namespace Hololens2_CameraTest
             {
                 case "Windows.Desktop":
                     _logger.Log("Windows desktop system architecture detected");
-                    _cameraParams = new CameraParameters(1280, 720, 30, videoformat);
+                    _cameraParams = new CameraParameters(1280, 720, 30, 
+                        videoformat.ToUpper() == "NV12" ? MediaEncodingSubtypes.Nv12 : MediaEncodingSubtypes.Yuy2);
                     break;
                 case "Windows.Holographic":
                     _logger.Log("Windows.Holographic system architecture detected");
-                    _cameraParams = new CameraParameters(896, 504, 30, videoformat);
-                    //_cameraParams = new CameraParameters(2272, 1278, 15);
+                    //_cameraParams = new CameraParameters(896, 504, 30,
+                    _cameraParams = new CameraParameters(2272, 1278, 15,
+                        videoformat.ToUpper() == "NV12" ? MediaEncodingSubtypes.Nv12 : MediaEncodingSubtypes.Yuy2);
+                    //_cameraParams = new CameraParameters(2272, 1278, 15, videoformat);
                     break;
                 default:
                     _logger.Log("Unknown architecture detected");
                     _cameraParams = new CameraParameters(640, 480, 30);
                     break;
             }
-            
+
             _logger?.Log($"Camera parameters: {_cameraParams}");
         }
         #endregion 
@@ -206,14 +210,24 @@ namespace Hololens2_CameraTest
             //IReadOnlyList<MediaCaptureVideoProfile> profiles = MediaCapture.FindKnownVideoProfiles(deviceId, KnownVideoProfile.VideoConferencing);
             //IReadOnlyList<MediaCaptureVideoProfile> profiles = MediaCapture.FindKnownVideoProfiles(deviceId, KnownVideoProfile.VideoRecording);
 
+            //foreach (var mediaCaptureVideoProfile in profiles)
+            //{
+            //    foreach (var desc in mediaCaptureVideoProfile.SupportedRecordMediaDescription)
+            //    { 
+            //        _logger.Log($"Found profile: {desc.Subtype} {desc.FrameRate} {desc.Width}x{desc.Height}");
+            //    }
+            //}
+
             var match = (from profile in profiles
                 from desc in profile.SupportedRecordMediaDescription
-                where desc.Subtype == "NV12" && desc.Width == 2272 && desc.Height == 1278 && Math.Abs(desc.FrameRate - 30) < Tolerance
+                where /*desc.Subtype == "NV12" &&*/ desc.Width == _cameraParams.CameraResolutionWidth 
+                                                    && desc.Height == _cameraParams.CameraResolutionHeight
+                                                    && Math.Abs(desc.FrameRate - _cameraParams.FrameRate) < Tolerance
                 select new { profile, desc}).FirstOrDefault();
 
             if (match != null)
             {
-                _logger.Log($"Found profile with desc: {match.desc.Subtype} {match.desc.FrameRate}fps {match.desc.Width}x{match.desc.Height} {match.desc.IsHdrVideoSupported}");
+                _logger.Log($"Found profile with desc: {match.desc.Subtype} {match.desc.FrameRate}fps {match.desc.Width}x{match.desc.Height}");
                 mediaInitSettings.VideoProfile = match.profile;
                 mediaInitSettings.RecordMediaDescription = match.desc;
             }
@@ -265,8 +279,8 @@ namespace Hololens2_CameraTest
                                 format.VideoFormat.Width == _cameraParams.CameraResolutionWidth
                                 &&
                                 Math.Round(format.FrameRate.Numerator / format.FrameRate.Denominator - _cameraParams.FrameRate) < Tolerance
-                                &&
-                                format.Subtype == _cameraParams.VideoFormat.ToUpper());
+                                /*&&
+                                format.Subtype == _cameraParams.VideoFormat.ToUpper()*/);
 
                 _logger.Log("matching Formats:");
                 var mediaFrameFormats = preferredFormat as MediaFrameFormat[] ?? preferredFormat.ToArray();
@@ -278,7 +292,10 @@ namespace Hololens2_CameraTest
                 var selectedFormat = mediaFrameFormats.FirstOrDefault();
                 await source.SetFormatAsync(selectedFormat);
 
-                _frameReader = await _mediaCapture.CreateFrameReaderAsync(source, selectedFormat.Subtype);
+                //_frameReader = await _mediaCapture.CreateFrameReaderAsync(source, selectedFormat.Subtype);
+                //_frameReader = await _mediaCapture.CreateFrameReaderAsync(source, MediaEncodingSubtypes.Yuy2);
+                //_frameReader = await _mediaCapture.CreateFrameReaderAsync(source, MediaEncodingSubtypes.Nv12);
+                _frameReader = await _mediaCapture.CreateFrameReaderAsync(source, _cameraParams.VideoFormat);
                 _frameReader.FrameArrived += OnFrameArrived;
 
                 FrameWidth = Convert.ToInt32(selectedFormat.VideoFormat.Width);
@@ -321,7 +338,7 @@ namespace Hololens2_CameraTest
                             byte* pixelData;
                             uint capacity;
                             ((IMemoryBufferByteAccess)reference).GetBuffer(out pixelData, out capacity);
-                            switch (_cameraParams.VideoFormat)
+                            switch (_cameraParams.VideoFormat.ToUpper())
                             {
                                 case "NV12":
                                     Marshal.Copy((IntPtr)pixelData, rawPixelData, 0, rawPixelData.Length);
@@ -329,11 +346,12 @@ namespace Hololens2_CameraTest
 
                                 case "YUY2":
                                     for (int i = 0, j = 0; i < _cameraParams.CameraResolutionWidth * _cameraParams.CameraResolutionHeight; i++, j += 2)
+                                    //for (int i = 0, j = 0; j < capacity; i++, j += 2)
                                     {
                                         rawPixelData[i] = pixelData[j];
                                     }
-
                                     break;
+
                                 default:
                                     throw new ArgumentException(
                                         $"Video format {_cameraParams.VideoFormat} not supported");
